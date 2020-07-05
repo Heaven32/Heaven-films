@@ -1,5 +1,4 @@
 const IMG_URL = 'https://image.tmdb.org/t/p/w185_and_h278_bestv2';
-const API_KEY = 'f2a1e6032c70a333bbaf1df6208d360f';
 
 // menu
 const leftMenu = document.querySelector('.left-menu');
@@ -12,15 +11,29 @@ const modalTitle = document.querySelector('.modal__title');
 const genresList = document.querySelector('.genres-list');
 const rating = document.querySelector('.rating');
 const description = document.querySelector('.description');
-const modalLink = document.querySelector('modal__link');
+const modalLink = document.querySelector('.modal__link');
+const searchForm = document.querySelector('.search__form');
+const searchFormInput = document.querySelector('.search__form-input');
+const preloader = document.querySelector('.preloader');
+const dropdown = document.querySelectorAll('.dropdown');
+const tvShowsHead = document.querySelector('.tv-shows__head');
+const posterWrapper = document.querySelector('.poster__wrapper');
+const modalContent = document.querySelector('.modal__content');
+const pagination = document.querySelector('.pagination');
 
 //preloader
 const loading = document.createElement('div');
 loading.className = 'loading';
 
 //server
-const DBService = class {
-    getData = async (url) => {
+class DBService {
+
+    constructor(){
+        this.SERVER = 'https://api.themoviedb.org/3';
+        this.API_KEY = 'f2a1e6032c70a333bbaf1df6208d360f';
+    }
+
+    getData = async (url) => { 
         const res = await fetch(url);
         if (res.ok) {
             return res.json();
@@ -36,11 +49,40 @@ const DBService = class {
     getTestCard = () => {
         return this.getData('card.json');
     }
+
+    getSearchResult = query =>{
+        this.temp = `${this.SERVER}/search/tv?api_key=${this.API_KEY}&query=${query}&language=ru-RU`;
+        return this.getData(this.temp);
+    };
+
+    getNextPage = page =>{
+        return this.getData(this.temp + '&page=' + page)
+    };
+    
+    getTvShow = id => this.getData(`${this.SERVER}/tv/${id}?api_key=${this.API_KEY}&language=ru-RU`);
+
+    getTopRated = () => this.getData(`${this.SERVER}/tv/top_rated?api_key=${this.API_KEY}&language=ru-RU`);
+
+    getPopular = () => this.getData(`${this.SERVER}/tv/popular?api_key=${this.API_KEY}&language=ru-RU`);
+
+    getToday = () => this.getData(`${this.SERVER}/tv/airing_today?api_key=${this.API_KEY}&language=ru-RU`);
+
+    getWeek = () => this.getData(`${this.SERVER}/tv/on_the_air?api_key=${this.API_KEY}&language=ru-RU`);
+    
 }
 
-const renderCard = response => {
-
+const renderCard = (response, target) => {
     tvShowsList.textContent = '';
+
+    if (!response.total_results){
+        loading.remove();
+        tvShowsHead.textContent = 'Ничего не найдено...';
+        tvShowsHead.style.cssText = 'color: black; border-bottom: 2px solid rgb(255,212,3); width: fit-content;';
+        return;
+    }
+
+    tvShowsHead.textContent = target ? target.textContent : 'Результат поиска:';
+    tvShowsHead.style.cssText = 'color: black;'
 
     response.results.forEach(item => {
 
@@ -48,8 +90,9 @@ const renderCard = response => {
             backdrop_path: backdrop, 
             name: title, 
             poster_path: poster, 
-            vote_average: vote 
-        } = item;
+            vote_average: vote,
+            id 
+            } = item;
 
         const posterImg = poster ? IMG_URL + poster : 'img/no-poster.jpg';
         const backdropImg = backdrop ? IMG_URL + backdrop : '';
@@ -58,7 +101,7 @@ const renderCard = response => {
         const card = document.createElement('li');
         card.className = 'tv-shows__item';
         card.innerHTML = `
-            <a href="#" class="tv-card">
+            <a href="#" id="${id}" class="tv-card">
                 ${voteEl}
                 <img class="tv-card__img"
                     src="${posterImg}"
@@ -71,7 +114,24 @@ const renderCard = response => {
         loading.remove();
         tvShowsList.append(card);
     });
+
+    pagination.textContent = '';
+    if (!target && response.total_pages > 1){
+        for (let i = 1; i <= response.total_pages; i++) {
+            pagination.innerHTML += `<li><a href="#" class="pages index">${i}</a></li>`;
+        }
+    }
 };
+
+searchForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const value = searchFormInput.value.trim();
+    if (value) {
+        tvShows.append(loading);
+        new DBService().getSearchResult(value).then(renderCard);
+    }
+    searchFormInput.value = '';
+})
 
 {
     tvShows.append(loading);
@@ -80,25 +140,55 @@ const renderCard = response => {
 
 // open/closed menu
 
+const closeDropdown = () => {
+    dropdown.forEach(item => {
+        item.classList.remove('active');
+    })
+}
+
 hamburger.addEventListener('click', event => {
     leftMenu.classList.toggle('openMenu');
     hamburger.classList.toggle('open');
+    closeDropdown();
 });
 
 document.addEventListener('click', event => {
     if (!event.target.closest('.left-menu')) {
         leftMenu.classList.remove('openMenu');
         hamburger.classList.remove('open');
+        closeDropdown();
     }
 });
 
 leftMenu.addEventListener('click', event => {
+    event.preventDefault();
     const target = event.target;
     const dropdown = target.closest('.dropdown');
     if (dropdown) {
         dropdown.classList.toggle('active');
         leftMenu.classList.add('openMenu');
         hamburger.classList.add('open');
+    }
+
+    if (target.closest('#top-rated')) {
+        tvShows.append(loading);
+        new DBService().getTopRated().then((response) => renderCard(response, target));
+    }
+    if (target.closest('#popular')) {
+        tvShows.append(loading);
+        new DBService().getPopular().then((response) => renderCard(response, target));
+    }
+    if (target.closest('#today')) {
+        tvShows.append(loading);
+        new DBService().getToday().then((response) => renderCard(response, target));
+    }
+    if (target.closest('#week')) {
+        tvShows.append(loading); 
+        new DBService().getWeek().then((response) => renderCard(response, target));
+    }
+    if (target.closest('#search')) {
+        tvShowsList.textContent = '';
+        tvShowsHead.textContent = '';
     }
 });
 
@@ -112,19 +202,52 @@ tvShowsList.addEventListener('click', event => {
 
     if (card) {
 
-        new DBService().getTestCard()   
-            .then(data => {
-                console.log(data);
-                tvCardImg.src = IMG_URL + data.poster_path;
-                modalTitle.textContent = data.name;
-                //genresList.innerHTML = data.genres.reduce((acc, item) =>`${acc} <li>${item.name}</li>`, '');
-                rating
-                description
-                modalLink 
-            })
+        preloader.style.display = 'block';
 
-        document.body.style.overflow = 'hidden';
-        modal.classList.remove('hide');
+        new DBService().getTvShow(card.id)   
+            .then(({
+                poster_path: posterPath,
+                name: title,
+                genres,
+                vote_average: voteAverage,
+                overview,
+                homepage }) => {
+
+                if (posterPath){
+                    tvCardImg.src = IMG_URL + posterPath;
+                    tvCardImg.alt = title;
+                    posterWrapper.style.display = '';
+                    modalContent.style.paddingLeft = '';
+                }else {
+                    posterWrapper.style.display = 'none';
+                    modalContent.style.paddingLeft = '25px';
+                }
+
+                modalTitle.textContent = title;
+                genresList.textContent = '';
+                
+                // reduce
+                //genresList.innerHTML = data.genres.reduce((acc, item) =>`${acc} <li>${item.name}</li>`, '');
+                
+                // for(of)
+                // for(const item of data.genres){
+                //     genresList.innerHTML += `<li>${item.name}</li>`;
+                // }
+                
+                // forEach()
+                genres.forEach(item => genresList.innerHTML += `<li>${item.name}</li>`);
+
+                rating.textContent = voteAverage;
+                description.textContent = overview;
+                modalLink.href = homepage;
+            })
+            .then(() => {
+                document.body.style.overflow = 'hidden';
+                modal.classList.remove('hide');
+            })
+            .finally(() => {
+                preloader.style.display = '';
+            })
     }
 });
 
@@ -152,16 +275,20 @@ const changeImage = event => {
         if (img.dataset.backdrop) {
             [img.src, img.dataset.backdrop] = [img.dataset.backdrop, img.src];
         }
-
-        // another
-        // if (changeImg) {
-        //     img.dataset.backdrop = img.src;
-        //     img.src = changeImg;
-        // }
     }
 };
 
 tvShowsList.addEventListener("mouseover", changeImage);
 tvShowsList.addEventListener("mouseout", changeImage);
+
+pagination.addEventListener('click', event => {
+    event.preventDefault();
+    const target = event.target;
+
+    if(target.classList.contains('pages')) {
+        tvShows.append(loading);
+        new DBService().getNextPage(target.textContent).then(renderCard);
+    }
+});
 
 
